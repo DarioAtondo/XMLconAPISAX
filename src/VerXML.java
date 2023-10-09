@@ -1,10 +1,16 @@
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+
 import javax.swing.*;
-import javax.swing.table.*;
-import javax.xml.parsers.*;
-import org.w3c.dom.*;
-import java.io.*;
+import javax.swing.table.DefaultTableModel;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
 import java.awt.*;
-import java.util.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class VerXML {
     private JFrame ventana;
@@ -23,82 +29,75 @@ public class VerXML {
 
     private void cargarContenidoXML(String rutaArchivoXML) {
         try {
-            File archivoXML = new File(rutaArchivoXML);
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            SAXParser saxParser = factory.newSAXParser();
 
-            DocumentBuilderFactory fabrica = DocumentBuilderFactory.newInstance();
-            DocumentBuilder constructor = fabrica.newDocumentBuilder();
-            Document documento = constructor.parse(archivoXML);
+            DefaultHandler handler = new DefaultHandler() {
+                boolean inCD = false;
+                String currentColumn = "";
+                Set<String> columnNames = new LinkedHashSet<>();
+                ArrayList<String> rowData = new ArrayList<>();
 
-            Element elementoRaiz = documento.getDocumentElement();
-            NodeList nodos = elementoRaiz.getElementsByTagName("*");
-
-            modeloTabla.setRowCount(0);
-            modeloTabla.setColumnCount(0);
-
-            Set<String> nombresColumnas = new LinkedHashSet<>();
-            for (int i = 0; i < nodos.getLength(); i++) {
-                Node nodo = nodos.item(i);
-                if (nodo.getNodeType() == Node.ELEMENT_NODE) {
-                    String nombreNodo = nodo.getNodeName();
-                    nombresColumnas.add(nombreNodo);
-                }
-            }
-
-            for (String nombreColumna : nombresColumnas) {
-                modeloTabla.addColumn(nombreColumna);
-            }
-
-            Object[] filaDatos = new Object[nombresColumnas.size()];
-            Arrays.fill(filaDatos, "");
-
-            for (int i = 0; i < nodos.getLength(); i++) {
-                Node nodo = nodos.item(i);
-                if (nodo.getNodeType() == Node.ELEMENT_NODE) {
-                    String nombreNodo = nodo.getNodeName();
-                    String valorNodo = nodo.getTextContent();
-                    int indiceColumna = getIndiceColumna(nombreNodo, modeloTabla);
-                    if (indiceColumna != -1) {
-                        filaDatos[indiceColumna] = valorNodo;
+                @Override
+                public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
+                    if ("CD".equals(qName)) {
+                        inCD = true;
+                        rowData.clear();
+                    } else if (inCD) {
+                        currentColumn = qName;
                     }
                 }
-                if (i > 0 && (i + 1) % nombresColumnas.size() == 0) {
-                    modeloTabla.addRow(filaDatos);
-                    Arrays.fill(filaDatos, "");
+
+                @Override
+                public void endElement(String uri, String localName, String qName) throws SAXException {
+                    if ("CD".equals(qName)) {
+                        modeloTabla.addRow(rowData.toArray());
+                        inCD = false;
+                    }
                 }
-            }
 
-            ventana = new JFrame("Visor de XML");
-            ventana.setUndecorated(true);
-            ventana.setSize(800, 600);
-            ventana.setLayout(new BorderLayout());
+                @Override
+                public void characters(char[] ch, int start, int length) throws SAXException {
+                    if (inCD && !currentColumn.isEmpty()) {
+                        String value = new String(ch, start, length);
+                        rowData.add(value);
+                        if (!columnNames.contains(currentColumn)) {
+                            columnNames.add(currentColumn);
+                            modeloTabla.addColumn(currentColumn);
+                        }
+                    }
+                }
 
-            JButton botonSalir = new JButton("Salir");
-            botonSalir.addActionListener(e -> System.exit(0));
-            ventana.add(botonSalir, BorderLayout.SOUTH);
+                @Override
+                public void startDocument() throws SAXException {
+                    modeloTabla.setRowCount(0);
+                    modeloTabla.setColumnCount(0);
+                }
 
-            JScrollPane panelDesplazamiento = new JScrollPane(tabla);
-            ventana.add(panelDesplazamiento, BorderLayout.CENTER);
+                @Override
+                public void endDocument() throws SAXException {
+                    ventana = new JFrame("Visor de XML");
+                    ventana.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-            Dimension tamanoPantalla = Toolkit.getDefaultToolkit().getScreenSize();
-            int x = (tamanoPantalla.width - ventana.getWidth()) / 2;
-            int y = (tamanoPantalla.height - ventana.getHeight()) / 2;
-            ventana.setLocation(x, y);
+                    JButton botonSalir = new JButton("Salir");
+                    botonSalir.addActionListener(e -> System.exit(0));
+                    ventana.add(botonSalir, BorderLayout.SOUTH);
 
-            ventana.setVisible(true);
+                    JScrollPane panelDesplazamiento = new JScrollPane(tabla);
+                    ventana.add(panelDesplazamiento, BorderLayout.CENTER);
+
+                    ventana.setSize(800, 600);
+                    ventana.setLocationRelativeTo(null);
+                    ventana.setVisible(true);
+                }
+            };
+
+            saxParser.parse(new File(rutaArchivoXML), handler);
 
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, "Error al cargar el archivo XML :( \\n Asegúrate de que el nombre de la ruta sea correcto o que el DTD esté en el directorio :)", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null, "Error al cargar el archivo XML :( \n Asegúrate de que el nombre de la ruta sea correcto o que el DTD esté en el directorio :)", "Error", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
-    }
-
-    private int getIndiceColumna(String nombreColumna, DefaultTableModel modelo) {
-        for (int i = 0; i < modelo.getColumnCount(); i++) {
-            if (modelo.getColumnName(i).equals(nombreColumna)) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     public static void main(String[] args) {
