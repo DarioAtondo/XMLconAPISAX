@@ -104,7 +104,7 @@ public class VerXML {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             VerXML app = new VerXML();
-            app.cargarContenidoXML("C:/Users/cecyh/Downloads/cd_catalog.xml");
+            app.cargarContenidoXML("src\\cd_catalog.xml");
         });
     }
 }
